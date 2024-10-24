@@ -154,14 +154,35 @@ class Tapper:
             response = await http_client.post(url=f'https://api-game.whitechain.io/api/apply-boost/{boost_id}')
             response.raise_for_status()
 
-            response_json = await response.json()
-
-            return response_json['data']
+            return await response.json()
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error when Apply Boost: {error}")
             await asyncio.sleep(delay=3)
 
-            return False
+    async def get_upgrades(self, http_client: ClientSession, upgrade_id: str) -> list[dict]:
+        try:
+            response = await http_client.get(url=f'https://api-game.whitechain.io/api/user-current-improvements')
+            response.raise_for_status()
+
+            resp_json = await response.json()
+
+            for upgrade in resp_json['data']:
+                if upgrade['next_level']['id'] == upgrade_id:
+                    return upgrade['next_level']['points']
+                
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error when Get Upgrades: {error}")
+            await asyncio.sleep(delay=3)
+
+    async def upgrade(self, http_client: ClientSession, upgrade_id: str) -> dict:
+        try:
+            response = await http_client.post(url=f'https://api-game.whitechain.io/api/upgrade-ship/{upgrade_id}')
+            response.raise_for_status()
+
+            return await response.json()
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error when Upgrade: {error}")
+            await asyncio.sleep(delay=3)
 
     async def check_proxy(self, http_client: ClientSession, proxy: Proxy) -> None:
         try:
