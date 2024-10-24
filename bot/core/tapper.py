@@ -121,3 +121,30 @@ class Tapper:
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error while getting Boosts Info: {error}")
             await asyncio.sleep(delay=3)
+
+    async def send_taps(self, http_client: aiohttp.ClientSession, taps: int) -> dict:
+        try:
+            response = await http_client.post(url='https://api-game.whitechain.io/api/claim-points',
+                                              json={'points': taps})
+            response.raise_for_status()
+
+            response_json = await response.json()
+
+            return response_json['user']
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error when Tapping: {error}")
+            await asyncio.sleep(delay=3)
+
+    async def apply_boost(self, http_client: aiohttp.ClientSession, boost_id: str) -> list[dict]:
+        try:
+            response = await http_client.post(url=f'https://api-game.whitechain.io/api/apply-boost/{boost_id}')
+            response.raise_for_status()
+
+            response_json = await response.json()
+
+            return response_json['data']
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error when Apply Turbo Boost: {error}")
+            await asyncio.sleep(delay=3)
+
+            return False
