@@ -1,7 +1,7 @@
 import asyncio
 from urllib.parse import unquote
 
-import aiohttp
+from aiohttp import ClientSession
 from better_proxy import Proxy
 from aiohttp_proxy import ProxyConnector
 from pyrogram import Client
@@ -80,7 +80,7 @@ class Tapper:
             logger.error(f"{self.session_name} | Unknown error during Authorization: {error}")
             await asyncio.sleep(delay=3)
 
-    async def login(self, http_client: aiohttp.ClientSession, tg_web_data: str) -> dict:
+    async def login(self, http_client: ClientSession, tg_web_data: str) -> dict:
         """
         Сделать проверку что time() < token_expires_at, тогда рефрешить
         Потом в https://api-game.whitechain.io/api/refresh-token передавать refresh_token
@@ -95,7 +95,7 @@ class Tapper:
             logger.error(f"{self.session_name} | Unknown error while getting Access Token: {error}")
             await asyncio.sleep(delay=3)
 
-    async def get_profile_data(self, http_client: aiohttp.ClientSession):
+    async def get_profile_data(self, http_client: ClientSession):
         try:
             response = await http_client.get(url='https://api-game.whitechain.io/api/user')
             response.raise_for_status()
@@ -108,7 +108,7 @@ class Tapper:
             logger.error(f"{self.session_name} | Unknown error while getting Profile Data: {error}")
             await asyncio.sleep(delay=3)
 
-    async def get_boosts_info(self, http_client: aiohttp.ClientSession) -> dict:
+    async def get_boosts_info(self, http_client: ClientSession) -> dict:
         """Количество доступных turbo/recharge бустов"""
         try:
             response = await http_client.get(url='https://api-game.whitechain.io/api/user-boosts-status')
@@ -122,7 +122,7 @@ class Tapper:
             logger.error(f"{self.session_name} | Unknown error while getting Boosts Info: {error}")
             await asyncio.sleep(delay=3)
 
-    async def send_taps(self, http_client: aiohttp.ClientSession, taps: int) -> dict:
+    async def send_taps(self, http_client: ClientSession, taps: int) -> dict:
         try:
             response = await http_client.post(url='https://api-game.whitechain.io/api/claim-points',
                                               json={'points': taps})
@@ -135,7 +135,7 @@ class Tapper:
             logger.error(f"{self.session_name} | Unknown error when Tapping: {error}")
             await asyncio.sleep(delay=3)
 
-    async def apply_boost(self, http_client: aiohttp.ClientSession, boost_id: str) -> list[dict]:
+    async def apply_boost(self, http_client: ClientSession, boost_id: str) -> list[dict]:
         try:
             response = await http_client.post(url=f'https://api-game.whitechain.io/api/apply-boost/{boost_id}')
             response.raise_for_status()
@@ -144,7 +144,18 @@ class Tapper:
 
             return response_json['data']
         except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error when Apply Turbo Boost: {error}")
+            logger.error(f"{self.session_name} | Unknown error when Apply Boost: {error}")
             await asyncio.sleep(delay=3)
 
             return False
+
+    async def claim(self, http_client: ClientSession) -> list[dict]:
+        """Просто раз в 24 * 3600 буду клеймить и +вайб"""
+        try:
+            response = await http_client.post(url='https://api-game.whitechain.io/api/user/daily-rewards/claim')
+            response.raise_for_status()
+
+            return await response.json()
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error when claim: {error}")
+            await asyncio.sleep(delay=3)
