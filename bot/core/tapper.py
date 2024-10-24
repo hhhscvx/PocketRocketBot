@@ -1,4 +1,5 @@
 import asyncio
+from pprint import pprint
 from random import randint
 from time import time
 from urllib.parse import unquote
@@ -162,17 +163,6 @@ class Tapper:
 
             return False
 
-    async def claim(self, http_client: ClientSession) -> list[dict]:
-        """Просто раз в 24 * 3600 буду клеймить и +вайб"""
-        try:
-            response = await http_client.post(url='https://api-game.whitechain.io/api/user/daily-rewards/claim')
-            response.raise_for_status()
-
-            return await response.json()
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error when claim: {error}")
-            await asyncio.sleep(delay=3)
-
     async def check_proxy(self, http_client: ClientSession, proxy: Proxy) -> None:
         try:
             response = await http_client.get(url='https://httpbin.org/ip', timeout=ClientTimeout(5))
@@ -198,19 +188,19 @@ class Tapper:
                         tg_web_data = await self.get_tg_web_data(proxy=proxy)
                         login = await self.login(http_client=http_client, tg_web_data=tg_web_data)
 
-                        http_client.headers["Authorization"] = f'Bearer {login['token']}'
-                        headers["Authorization"] = f'Bearer {login['token']}'
+                        http_client.headers["Authorization"] = f'Bearer {login["token"]}'
+                        headers["Authorization"] = f'Bearer {login["token"]}'
                         refresh_token = login['refresh_token']
                         access_token_expires_at = login['refresh_token_expires_at']
 
                         balance = login['user']['current_points']
 
                         logger.info(f"{self.session_name} | Login! | Balance: {balance}")
-                    elif time() < access_token_expires_at:
+                    elif (curr_time := time()) > access_token_expires_at:
                         refresh = await self.refresh_token(http_client, refresh_token=refresh_token)
 
-                        http_client.headers["Authorization"] = f'Bearer {refresh['token']}'
-                        headers["Authorization"] = f'Bearer {refresh['token']}'
+                        http_client.headers["Authorization"] = f'Bearer {refresh["token"]}'
+                        headers["Authorization"] = f'Bearer {refresh["token"]}'
                         refresh_token = refresh['refresh_token']
                         access_token_expires_at = refresh['refresh_token_expires_at']
 
@@ -218,7 +208,25 @@ class Tapper:
 
                         logger.info(f"{self.session_name} | Refresh Token | Balance: {balance}")
 
-                    
+                    taps = randint(*settings.RANDOM_TAPS_COUNT)
+                    tapped = await self.send_taps(http_client, taps=taps)
+
+                    if not tapped:
+                        continue
+
+                    available_energy = int(tapped.get('current_energy'))
+                    balance = int(tapped['current_points'])
+                    logger.success(f"{self.session_name} | Successful tapped! | "
+                                   f"Balance: <c>{balance}</c> (<g>+{taps}</g>)")
+
+                    if available_energy < settings.MIN_AVAILABLE_ENERGY:
+                        sleep_time = randint(*settings.SLEEP_BY_MIN_ENERGY)
+                        logger.info(f"{self.session_name} | Minimum energy reached: {available_energy}")
+                        logger.info(f"{self.session_name} | Sleep {sleep_time}s")
+
+                        await asyncio.sleep(delay=sleep_time)
+
+                        continue
 
                 except InvalidSession as error:
                     raise error
