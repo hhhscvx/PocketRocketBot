@@ -1,7 +1,9 @@
 import asyncio
+from random import randint
+from time import time
 from urllib.parse import unquote
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ClientTimeout
 from better_proxy import Proxy
 from aiohttp_proxy import ProxyConnector
 from pyrogram import Client
@@ -95,6 +97,17 @@ class Tapper:
             logger.error(f"{self.session_name} | Unknown error while getting Access Token: {error}")
             await asyncio.sleep(delay=3)
 
+    async def refresh_token(self, http_client: ClientSession, refresh_token: str) -> dict:
+        try:
+            response = await http_client.post(url='https://api-game.whitechain.io/api/refresh-token',
+                                              json={"refresh_token": refresh_token})
+            response.raise_for_status()
+
+            return await response.json()
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error while getting Access Token: {error}")
+            await asyncio.sleep(delay=3)
+
     async def get_profile_data(self, http_client: ClientSession):
         try:
             response = await http_client.get(url='https://api-game.whitechain.io/api/user')
@@ -159,3 +172,70 @@ class Tapper:
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error when claim: {error}")
             await asyncio.sleep(delay=3)
+
+    async def check_proxy(self, http_client: ClientSession, proxy: Proxy) -> None:
+        try:
+            response = await http_client.get(url='https://httpbin.org/ip', timeout=ClientTimeout(5))
+            ip = (await response.json()).get('origin')
+            logger.info(f"{self.session_name} | Proxy IP: {ip}")
+        except Exception as error:
+            logger.error(f"{self.session_name} | Proxy: {proxy} | Error: {error}")
+
+    async def run(self, proxy: str | None) -> None:
+        access_token_expires_at = 0
+        last_claimed_time = 0
+        refresh_token = ''
+
+        proxy_conn = ProxyConnector().from_url(proxy) if proxy else None
+
+        async with ClientSession(headers=headers, connector=proxy_conn) as http_client:
+            if proxy:
+                await self.check_proxy(http_client=http_client, proxy=proxy)
+
+            while True:
+                try:
+                    if access_token_expires_at == 0:
+                        tg_web_data = await self.get_tg_web_data(proxy=proxy)
+                        login = await self.login(http_client=http_client, tg_web_data=tg_web_data)
+
+                        http_client.headers["Authorization"] = f'Bearer {login['token']}'
+                        headers["Authorization"] = f'Bearer {login['token']}'
+                        refresh_token = login['refresh_token']
+                        access_token_expires_at = login['refresh_token_expires_at']
+
+                        balance = login['user']['current_points']
+
+                        logger.info(f"{self.session_name} | Login! | Balance: {balance}")
+                    elif time() < access_token_expires_at:
+                        refresh = await self.refresh_token(http_client, refresh_token=refresh_token)
+
+                        http_client.headers["Authorization"] = f'Bearer {refresh['token']}'
+                        headers["Authorization"] = f'Bearer {refresh['token']}'
+                        refresh_token = refresh['refresh_token']
+                        access_token_expires_at = refresh['refresh_token_expires_at']
+
+                        balance = refresh['user']['current_points']
+
+                        logger.info(f"{self.session_name} | Refresh Token | Balance: {balance}")
+
+                    
+
+                except InvalidSession as error:
+                    raise error
+
+                except Exception as error:
+                    logger.error(f"{self.session_name} | Unknown error: {error}")
+                    await asyncio.sleep(delay=3)
+
+                else:
+                    sleep_between_clicks = randint(*settings.SLEEP_BETWEEN_TAP)
+
+                    logger.info(f"Sleep {sleep_between_clicks}s")
+                    await asyncio.sleep(delay=sleep_between_clicks)
+
+
+async def run_tapper(tg_client: Client, proxy: str | None):
+    try:
+        await Tapper(tg_client=tg_client).run(proxy=proxy)
+    except InvalidSession:
+        logger.error(f"{tg_client.name} | Invalid Session")
