@@ -79,3 +79,14 @@ class Tapper:
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error during Authorization: {error}")
             await asyncio.sleep(delay=3)
+
+    async def login(self, http_client: aiohttp.ClientSession, tg_web_data: str) -> dict:
+        try:
+            response = await http_client.post(url='https://api-game.whitechain.io/api/login',
+                                              json={"init_data": tg_web_data})
+            response.raise_for_status()
+
+            return await response.json()
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error while getting Access Token: {error}")
+            await asyncio.sleep(delay=3)
