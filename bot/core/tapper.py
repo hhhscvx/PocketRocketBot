@@ -81,6 +81,10 @@ class Tapper:
             await asyncio.sleep(delay=3)
 
     async def login(self, http_client: aiohttp.ClientSession, tg_web_data: str) -> dict:
+        """
+        Сделать проверку что time() < token_expires_at, тогда рефрешить
+        Потом в https://api-game.whitechain.io/api/refresh-token передавать refresh_token
+        """
         try:
             response = await http_client.post(url='https://api-game.whitechain.io/api/login',
                                               json={"init_data": tg_web_data})
@@ -89,4 +93,31 @@ class Tapper:
             return await response.json()
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error while getting Access Token: {error}")
+            await asyncio.sleep(delay=3)
+
+    async def get_profile_data(self, http_client: aiohttp.ClientSession):
+        try:
+            response = await http_client.get(url='https://api-game.whitechain.io/api/user')
+            response.raise_for_status()
+
+            response_json = await response.json()
+            profile_data = response_json['user']
+
+            return profile_data
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error while getting Profile Data: {error}")
+            await asyncio.sleep(delay=3)
+
+    async def get_boosts_info(self, http_client: aiohttp.ClientSession) -> dict:
+        """Количество доступных turbo/recharge бустов"""
+        try:
+            response = await http_client.get(url='https://api-game.whitechain.io/api/user-boosts-status')
+            response.raise_for_status()
+
+            response_json = await response.json()
+            boosts_info = response_json['data']
+
+            return boosts_info
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error while getting Boosts Info: {error}")
             await asyncio.sleep(delay=3)
