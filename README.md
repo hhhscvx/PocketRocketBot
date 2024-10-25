@@ -48,9 +48,9 @@ You can download [**Repository**](https://github.com/hhhscvx/PocketRocketBot) by
 
 Also for quick launch you can use arguments, for example:
 ```shell
-~/YesCoinBot >>> python3 main.py --action (1/2/3)
+~/PocketRocketBot >>> python3 main.py --action (1/2/3)
 # Or
-~/YesCoinBot >>> python3 main.py -a (1/2/3)
+~/PocketRocketBot >>> python3 main.py -a (1/2/3)
 
 #1 - Create session
 #2 - Run clicker
