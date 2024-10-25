@@ -19,12 +19,12 @@ class Settings(BaseSettings):
     AUTO_UPGRADE_TAP: bool = True
     AUTO_UPGRADE_ENERGY: bool = True
     AUTO_UPGRADE_CHARGE: bool = True
+    AUTO_UPGRADE_AUTOBOT: bool = True
 
-    MAX_TAP_LEVEL: int = 7
-    MAX_ENERGY_LEVEL: int = 7
-    MAX_CHARGE_LEVEL: int = 3
-
-    RELOGIN_DELAY: list[int] = [5, 7]
+    MAX_TAP_LEVEL: int = 8
+    MAX_ENERGY_LEVEL: int = 8
+    MAX_CHARGE_LEVEL: int = 8
+    MAX_AUTOBOT_LEVEL: int = 8
 
     USE_PROXY_FROM_FILE: bool = False
 

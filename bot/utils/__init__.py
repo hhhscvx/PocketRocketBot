@@ -1,5 +1,5 @@
 from .logger import logger
-from .schemas import BoostsInfo
+from .schemas import BoostsInfo, UpgradesInfo
 
 
 import os

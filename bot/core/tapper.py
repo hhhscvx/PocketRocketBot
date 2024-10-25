@@ -10,7 +10,7 @@ from pyrogram import Client
 from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered, FloodWait
 from pyrogram.raw.functions.messages import RequestWebView
 
-from ..utils import logger, BoostsInfo
+from ..utils import logger, BoostsInfo, UpgradesInfo
 from ..config import InvalidSession, settings
 from .headers import headers
 
@@ -163,16 +163,45 @@ class Tapper:
             logger.error(f"{self.session_name} | Unknown error when Apply Boost: {error}")
             await asyncio.sleep(delay=3)
 
-    async def get_upgrade_price(self, http_client: ClientSession, upgrade_id: str) -> int | None:
+    async def get_upgrades_info(self, http_client: ClientSession) -> UpgradesInfo:
         try:
             response = await http_client.get(url=f'https://api-game.whitechain.io/api/user-current-improvements')
             response.raise_for_status()
 
             resp_json = await response.json()
 
-            for upgrade in resp_json['data']:
-                if upgrade['next_level']['id'] == upgrade_id:
-                    return upgrade['next_level']['points']
+            upgrades = resp_json['data']
+            taps_info = {}
+            energy_info = {}
+            recharge_info = {}
+            autopilot_info = {}
+            for upgrade in upgrades:
+                match upgrade['improvement']['name']:
+                    case 'Wings':
+                        taps_info = upgrade
+                    case 'Fuselage':
+                        energy_info = upgrade
+                    case 'Reactor':
+                        recharge_info = upgrade
+                    case 'Autopilot':
+                        autopilot_info = upgrade
+
+            upgrades_info = UpgradesInfo(
+                tap_id=taps_info['improvement']['id'],
+                energy_id=energy_info['improvement']['id'],
+                recharge_id=recharge_info['improvement']['id'],
+                autopilot_id=autopilot_info['improvement']['id'],
+                tap_upgrade_price=taps_info['next_level']['points'],
+                energy_upgrade_price=energy_info['next_level']['points'],
+                recharge_upgrade_price=recharge_info['next_level']['points'],
+                autopilot_upgrade_price=autopilot_info['next_level']['points'],
+                tap_next_level=taps_info['current_level']['level'] + 1,
+                energy_next_level=energy_info['current_level']['level'] + 1,
+                recharge_next_level=recharge_info['current_level']['level'] + 1,
+                autopilot_next_level=autopilot_info['current_level']['level'] + 1,
+            )
+
+            return upgrades_info
 
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error when Get Upgrades: {error}")
@@ -200,6 +229,7 @@ class Tapper:
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error when Upgrade: {error}")
             await asyncio.sleep(delay=3)
+            raise error
 
     async def check_proxy(self, http_client: ClientSession, proxy: Proxy) -> None:
         try:
@@ -211,7 +241,6 @@ class Tapper:
 
     async def run(self, proxy: str | None) -> None:
         access_token_expires_at = 0
-        last_claimed_time = 0  # TODO клейм вернуть
         refresh_token = ''
 
         proxy_conn = ProxyConnector().from_url(proxy) if proxy else None
@@ -259,6 +288,7 @@ class Tapper:
                                    f"Balance: <c>{balance}</c> (<g>+{taps}</g>)")
 
                     boosts_info = await self.get_boosts_info(http_client)
+                    upgrades_info = await self.get_upgrades_info(http_client)
 
                     if (boosts_info.energy_count > 0
                             and available_energy < settings.MIN_AVAILABLE_ENERGY
@@ -283,7 +313,69 @@ class Tapper:
 
                             await asyncio.sleep(delay=1)
 
-                    if available_energy < settings.MIN_AVAILABLE_ENERGY:
+                    if (settings.AUTO_UPGRADE_TAP is True
+                            and balance > upgrades_info.tap_upgrade_price
+                            and upgrades_info.tap_next_level <= settings.MAX_TAP_LEVEL):
+                        logger.info(
+                            f"{self.session_name} | Sleep 5s before upgrade tap to {upgrades_info.tap_next_level} lvl")
+                        await asyncio.sleep(delay=5)
+
+                        status = await self.upgrade(http_client=http_client, upgrade_id=upgrades_info.tap_id)
+                        if status is True:
+                            logger.success(
+                                f"{self.session_name} | Tap upgraded to {upgrades_info.tap_next_level} lvl")
+
+                            await asyncio.sleep(delay=1)
+
+                        continue
+
+                    if (settings.AUTO_UPGRADE_ENERGY is True
+                            and balance > upgrades_info.energy_upgrade_price
+                            and upgrades_info.energy_next_level <= settings.MAX_ENERGY_LEVEL):
+                        logger.info(
+                            f"{self.session_name} | Sleep 5s before upgrade energy to {upgrades_info.energy_next_level} lvl")
+                        await asyncio.sleep(delay=5)
+
+                        status = await self.upgrade(http_client=http_client, upgrade_id=upgrades_info.energy_id)
+                        if status is True:
+                            logger.success(
+                                f"{self.session_name} | Energy upgraded to {upgrades_info.energy_next_level} lvl")
+
+                            await asyncio.sleep(delay=1)
+
+                        continue
+
+                    if (settings.AUTO_UPGRADE_CHARGE is True
+                            and balance > upgrades_info.recharge_upgrade_price
+                            and (next_autopilot_level := upgrades_info.recharge_next_level) <= settings.MAX_CHARGE_LEVEL):
+                        logger.info(
+                            f"{self.session_name} | Sleep 5s before upgrade charge to {next_autopilot_level} lvl")
+                        await asyncio.sleep(delay=5)
+
+                        status = await self.upgrade(http_client=http_client, upgrade_id=upgrades_info.recharge_id)
+                        if status is True:
+                            logger.success(f"{self.session_name} | Charge upgraded to {next_autopilot_level} lvl")
+
+                            await asyncio.sleep(delay=1)
+
+                        continue
+
+                    if (settings.AUTO_UPGRADE_AUTOBOT is True
+                            and balance > upgrades_info.autopilot_upgrade_price
+                            and (next_autopilot_level := upgrades_info.autopilot_next_level) <= settings.MAX_AUTOBOT_LEVEL):
+                        logger.info(
+                            f"{self.session_name} | Sleep 5s before upgrade autopilot to {next_autopilot_level} lvl")
+                        await asyncio.sleep(delay=5)
+
+                        status = await self.upgrade(http_client=http_client, upgrade_id=upgrades_info.recharge_id)
+                        if status is True:
+                            logger.success(f"{self.session_name} | Autopilot upgraded to {next_autopilot_level} lvl")
+
+                            await asyncio.sleep(delay=1)
+
+                        continue
+
+                    if available_energy < (settings.MIN_AVAILABLE_ENERGY * tap_multiply):
                         sleep_time = randint(*settings.SLEEP_BY_MIN_ENERGY)
                         logger.info(f"{self.session_name} | Minimum energy reached: {available_energy}")
                         logger.info(f"{self.session_name} | Sleep {sleep_time}s")
@@ -298,6 +390,7 @@ class Tapper:
                 except Exception as error:
                     logger.error(f"{self.session_name} | Unknown error: {error}")
                     await asyncio.sleep(delay=3)
+                    raise error
 
                 else:
                     sleep_between_clicks = randint(*settings.SLEEP_BETWEEN_TAP)
