@@ -1,5 +1,4 @@
 import asyncio
-from pprint import pprint
 from random import randint
 from time import time
 from urllib.parse import unquote
@@ -11,7 +10,7 @@ from pyrogram import Client
 from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered, FloodWait
 from pyrogram.raw.functions.messages import RequestWebView
 
-from ..utils import logger
+from ..utils import logger, BoostsInfo
 from ..config import InvalidSession, settings
 from .headers import headers
 
@@ -122,16 +121,21 @@ class Tapper:
             logger.error(f"{self.session_name} | Unknown error while getting Profile Data: {error}")
             await asyncio.sleep(delay=3)
 
-    async def get_boosts_info(self, http_client: ClientSession) -> dict:
-        """Количество доступных turbo/recharge бустов"""
+    async def get_boosts_info(self, http_client: ClientSession) -> BoostsInfo:
         try:
             response = await http_client.get(url='https://api-game.whitechain.io/api/user-boosts-status')
             response.raise_for_status()
 
             response_json = await response.json()
             boosts_info = response_json['data']
+            boosts = BoostsInfo(
+                turbo_id=boosts_info[0]['id'],
+                turbo_count=boosts_info[0]['charges_left'],
+                energy_id=boosts_info[1]['id'],
+                energy_count=boosts_info[1]['charges_left'],
+            )
 
-            return boosts_info
+            return boosts
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error while getting Boosts Info: {error}")
             await asyncio.sleep(delay=3)
@@ -159,7 +163,7 @@ class Tapper:
             logger.error(f"{self.session_name} | Unknown error when Apply Boost: {error}")
             await asyncio.sleep(delay=3)
 
-    async def get_upgrades(self, http_client: ClientSession, upgrade_id: str) -> list[dict]:
+    async def get_upgrade_price(self, http_client: ClientSession, upgrade_id: str) -> int | None:
         try:
             response = await http_client.get(url=f'https://api-game.whitechain.io/api/user-current-improvements')
             response.raise_for_status()
@@ -169,7 +173,7 @@ class Tapper:
             for upgrade in resp_json['data']:
                 if upgrade['next_level']['id'] == upgrade_id:
                     return upgrade['next_level']['points']
-                
+
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error when Get Upgrades: {error}")
             await asyncio.sleep(delay=3)
@@ -194,7 +198,7 @@ class Tapper:
 
     async def run(self, proxy: str | None) -> None:
         access_token_expires_at = 0
-        last_claimed_time = 0
+        last_claimed_time = 0  # TODO клейм вернуть
         refresh_token = ''
 
         proxy_conn = ProxyConnector().from_url(proxy) if proxy else None
@@ -217,7 +221,7 @@ class Tapper:
                         balance = login['user']['current_points']
 
                         logger.info(f"{self.session_name} | Login! | Balance: {balance}")
-                    elif (curr_time := time()) > access_token_expires_at:
+                    elif time() > access_token_expires_at:
                         refresh = await self.refresh_token(http_client, refresh_token=refresh_token)
 
                         http_client.headers["Authorization"] = f'Bearer {refresh["token"]}'
@@ -239,6 +243,31 @@ class Tapper:
                     balance = int(tapped['current_points'])
                     logger.success(f"{self.session_name} | Successful tapped! | "
                                    f"Balance: <c>{balance}</c> (<g>+{taps}</g>)")
+
+                    boosts_info = await self.get_boosts_info(http_client)
+
+                    if (boosts_info.energy_count > 0
+                            and available_energy < settings.MIN_AVAILABLE_ENERGY
+                            and settings.APPLY_DAILY_ENERGY is True):
+                        logger.info(f"{self.session_name} | Sleep 5s before activating the daily energy boost")
+                        await asyncio.sleep(delay=5)
+
+                        status = await self.apply_boost(http_client=http_client, boost_id=boosts_info.energy_id)
+                        if status:
+                            logger.success(f"{self.session_name} | Energy boost applied")
+
+                            await asyncio.sleep(delay=1)
+
+                    if boosts_info.turbo_count > 0 and settings.APPLY_DAILY_TURBO is True:
+                        logger.info(f"{self.session_name} | Sleep 5s before activating the daily turbo boost")
+                        await asyncio.sleep(delay=5)
+
+                        status = await self.apply_boost(http_client=http_client, boost_id=boosts_info.turbo_id)
+                        if status:
+                            logger.success(f"{self.session_name} | Turbo boost applied")
+
+                            await asyncio.sleep(delay=1)
+                            
 
                     if available_energy < settings.MIN_AVAILABLE_ENERGY:
                         sleep_time = randint(*settings.SLEEP_BY_MIN_ENERGY)
