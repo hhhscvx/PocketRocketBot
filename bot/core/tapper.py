@@ -178,6 +178,19 @@ class Tapper:
             logger.error(f"{self.session_name} | Unknown error when Get Upgrades: {error}")
             await asyncio.sleep(delay=3)
 
+    async def get_multitap_upgrade(self, http_client: ClientSession) -> int:
+        try:
+            response = await http_client.get(url=f'https://api-game.whitechain.io/api/user-current-improvements')
+            response.raise_for_status()
+
+            resp_json = await response.json()
+
+            return resp_json['data'][3]['current_level']['level'] + 1
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error when Get Upgrades: {error}")
+            await asyncio.sleep(delay=3)
+
     async def upgrade(self, http_client: ClientSession, upgrade_id: str) -> dict:
         try:
             response = await http_client.post(url=f'https://api-game.whitechain.io/api/upgrade-ship/{upgrade_id}')
@@ -233,7 +246,8 @@ class Tapper:
 
                         logger.info(f"{self.session_name} | Refresh Token | Balance: {balance}")
 
-                    taps = randint(*settings.RANDOM_TAPS_COUNT)
+                    tap_multiply = await self.get_multitap_upgrade(http_client)
+                    taps = randint(*settings.RANDOM_TAPS_COUNT) * tap_multiply
                     tapped = await self.send_taps(http_client, taps=taps)
 
                     if not tapped:
@@ -257,6 +271,7 @@ class Tapper:
                             logger.success(f"{self.session_name} | Energy boost applied")
 
                             await asyncio.sleep(delay=1)
+                            continue
 
                     if boosts_info.turbo_count > 0 and settings.APPLY_DAILY_TURBO is True:
                         logger.info(f"{self.session_name} | Sleep 5s before activating the daily turbo boost")
@@ -267,7 +282,6 @@ class Tapper:
                             logger.success(f"{self.session_name} | Turbo boost applied")
 
                             await asyncio.sleep(delay=1)
-                            
 
                     if available_energy < settings.MIN_AVAILABLE_ENERGY:
                         sleep_time = randint(*settings.SLEEP_BY_MIN_ENERGY)
