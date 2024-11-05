@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     MAX_CHARGE_LEVEL: int = 8
     MAX_AUTOBOT_LEVEL: int = 8
 
+    SHIP_TO_EQUIP: str = "0df2f67c-7ff2-4732-a0ca-17a635731b1b"
+
     USE_PROXY_FROM_FILE: bool = False
 
     WORKDIR: str = "sessions/"

@@ -83,10 +83,6 @@ class Tapper:
             await asyncio.sleep(delay=3)
 
     async def login(self, http_client: ClientSession, tg_web_data: str) -> dict:
-        """
-        Сделать проверку что time() < token_expires_at, тогда рефрешить
-        Потом в https://api-game.whitechain.io/api/refresh-token передавать refresh_token
-        """
         try:
             response = await http_client.post(url='https://api-game.whitechain.io/api/login',
                                               json={"init_data": tg_web_data})
@@ -95,6 +91,20 @@ class Tapper:
             return await response.json()
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error while getting Access Token: {error}")
+            await asyncio.sleep(delay=3)
+
+    async def equip_ship(self, http_client: ClientSession):
+        """
+        Надевает корабль, если еще не экипирован
+        """
+        try:
+            response = await http_client.post(
+                url=f'https://api-game.whitechain.io/api/select-ship/{settings.SHIP_TO_EQUIP}'
+            )
+
+            return await response.json()
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error when select ship: {error}")
             await asyncio.sleep(delay=3)
 
     async def refresh_token(self, http_client: ClientSession, refresh_token: str) -> dict:
@@ -254,6 +264,11 @@ class Tapper:
                     if access_token_expires_at == 0:
                         tg_web_data = await self.get_tg_web_data(proxy=proxy)
                         login = await self.login(http_client=http_client, tg_web_data=tg_web_data)
+                        if login['user']['ship'] is None:
+                            logger.info(f"Ship is not equipped, try to equip..")
+                            await asyncio.sleep(1)
+                            await self.equip_ship(http_client)
+                            logger.success(f"Ship Equiped!")
 
                         http_client.headers["Authorization"] = f'Bearer {login["token"]}'
                         headers["Authorization"] = f'Bearer {login["token"]}'
@@ -390,7 +405,6 @@ class Tapper:
                 except Exception as error:
                     logger.error(f"{self.session_name} | Unknown error: {error}")
                     await asyncio.sleep(delay=3)
-                    raise error
 
                 else:
                     sleep_between_clicks = randint(*settings.SLEEP_BETWEEN_TAP)
