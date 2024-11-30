@@ -11,8 +11,8 @@ from pyrogram import Client
 from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered, FloodWait
 from pyrogram.raw.functions.messages import RequestWebView
 
-from ..utils import logger, BoostsInfo, UpgradesInfo
-from ..config import InvalidSession, settings
+from bot.utils import logger, BoostsInfo, UpgradesInfo
+from bot.config import InvalidSession, settings
 from .headers import headers
 
 
