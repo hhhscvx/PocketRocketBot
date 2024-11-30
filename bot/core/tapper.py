@@ -1,4 +1,5 @@
 import asyncio
+from pprint import pprint
 from random import randint
 from time import time
 from urllib.parse import unquote
@@ -382,7 +383,7 @@ class Tapper:
                             f"{self.session_name} | Sleep 5s before upgrade autopilot to {next_autopilot_level} lvl")
                         await asyncio.sleep(delay=5)
 
-                        status = await self.upgrade(http_client=http_client, upgrade_id=upgrades_info.recharge_id)
+                        status = await self.upgrade(http_client=http_client, upgrade_id=upgrades_info.autopilot_id)
                         if status is True:
                             logger.success(f"{self.session_name} | Autopilot upgraded to {next_autopilot_level} lvl")
 
